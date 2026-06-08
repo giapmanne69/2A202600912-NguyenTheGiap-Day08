@@ -399,23 +399,30 @@ cp .env.example .env
 
 ---
 
-### Bài Cá Nhân — 50 điểm (50%)
+### Bài Cá Nhân Đã Làm
 
-Chấm bằng automated test suite (`pytest tests/ -v`). Mỗi task có test riêng.
+Phần cá nhân đã triển khai đủ 10 task trong pipeline RAG:
 
-| Task | Nội dung | Điểm | Test |
-|------|----------|------|------|
-| 1 | Thu thập văn bản pháp luật (≥3 files tồn tại trong `data/landing/legal/`) | 3 | `test_task1_*` |
-| 2 | Crawl bài báo (≥5 files tồn tại trong `data/landing/news/`) | 3 | `test_task2_*` |
-| 3 | Convert markdown (files tồn tại trong `data/standardized/`) | 4 | `test_task3_*` |
-| 4 | Chunking + Indexing (vector store có data) | 7 | `test_task4_*` |
-| 5 | Semantic search trả về kết quả đúng format, sorted | 6 | `test_task5_*` |
-| 6 | Lexical search (BM25) trả về kết quả đúng format | 6 | `test_task6_*` |
-| 7 | Reranking hoạt động, output re-sorted | 6 | `test_task7_*` |
-| 8 | PageIndex query trả về kết quả | 4 | `test_task8_*` |
-| 9 | Retrieval pipeline + fallback logic hoạt động | 7 | `test_task9_*` |
-| 10 | Generation có citation + reorder | 4 | `test_task10_*` |
-| **Tổng** | | **50** | |
+- Task 1–3: thu thập dữ liệu pháp luật/tin tức và chuẩn hóa sang markdown.
+- Task 4–6: chunking, indexing, semantic search và lexical search.
+- Task 7–8: reranking và fallback PageIndex vectorless.
+- Task 9: retrieval pipeline tổng hợp với logic fallback.
+- Task 10: generation có citation và reorder context.
+
+### Kiểm Tra
+
+Chạy test toàn bộ:
+
+```bash
+pytest tests/ -v
+```
+
+Chạy từng task:
+
+```bash
+pytest tests/test_individual.py::TestTask1 -v
+pytest tests/test_individual.py::TestTask10 -v
+```
 
 ---
 

@@ -45,3 +45,5 @@ def setup_directory():
 
 if __name__ == "__main__":
     setup_directory()
+
+# Ghi chú: Đã hoàn thành với việc tải thủ công.

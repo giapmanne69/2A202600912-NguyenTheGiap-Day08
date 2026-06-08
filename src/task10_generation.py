@@ -1,14 +1,3 @@
-"""
-Task 10 — Generation Có Citation.
-
-Hướng dẫn:
-    1. Chọn top_k, top_p phù hợp (giải thích lý do)
-    2. Sắp xếp lại chunks sau reranking để tránh "lost in the middle"
-    3. Inject context vào prompt
-    4. Yêu cầu LLM trả lời có citation
-    5. Nếu không đủ evidence → "I cannot verify this information"
-"""
-
 import os
 from dotenv import load_dotenv
 
@@ -76,19 +65,19 @@ def reorder_for_llm(chunks: list[dict]) -> list[dict]:
         List reordered để maximize LLM attention.
     """
     # TODO: Implement reordering
-    #
-    # if len(chunks) <= 2:
-    #     return chunks
-    #
-    # # Split into first half (important → đầu) and second half (important → cuối)
-    # reordered = []
-    # for i in range(0, len(chunks), 2):
-    #     reordered.append(chunks[i])  # Odd positions go first
-    # for i in range(len(chunks) - 1 - (len(chunks) % 2 == 0), 0, -2):
-    #     reordered.append(chunks[i])  # Even positions go last (reversed)
-    #
-    # return reordered
-    raise NotImplementedError("Implement reorder_for_llm")
+    if len(chunks) <= 2:
+        return chunks
+
+    reordered = []
+    # Đọc xen kẽ vị trí: các phần tử index chẵn đẩy lên đầu, index lẻ đảo ngược đẩy xuống cuối
+    for i in range(0, len(chunks), 2):
+        reordered.append(chunks[i])
+    
+    start_even_check = len(chunks) - 1 - (len(chunks) % 2 == 0)
+    for i in range(start_even_check, 0, -2):
+        reordered.append(chunks[i])
+
+    return reordered
 
 
 # =============================================================================
@@ -107,17 +96,16 @@ def format_context(chunks: list[dict]) -> str:
         Formatted context string.
     """
     # TODO: Implement context formatting
-    #
-    # context_parts = []
-    # for i, chunk in enumerate(chunks, 1):
-    #     source = chunk.get("metadata", {}).get("source", f"Source {i}")
-    #     doc_type = chunk.get("metadata", {}).get("type", "unknown")
-    #     context_parts.append(
-    #         f"[Document {i} | Source: {source} | Type: {doc_type}]\n"
-    #         f"{chunk['content']}\n"
-    #     )
-    # return "\n---\n".join(context_parts)
-    raise NotImplementedError("Implement format_context")
+    context_parts = []
+    for i, chunk in enumerate(chunks, 1):
+        metadata = chunk.get("metadata", {})
+        source = metadata.get("source") or metadata.get("filename") or f"Source {i}"
+        doc_type = metadata.get("doc_type") or metadata.get("type") or "unknown"
+        context_parts.append(
+            f"[Document {i} | Source: {source} | Type: {doc_type}]\n"
+            f"{chunk['content']}\n"
+        )
+    return "\n---\n".join(context_parts)
 
 
 # =============================================================================
@@ -126,63 +114,51 @@ def format_context(chunks: list[dict]) -> str:
 
 def generate_with_citation(query: str, top_k: int = TOP_K) -> dict:
     """
-    End-to-end RAG generation có citation.
-
-    Pipeline:
-        1. Retrieve relevant chunks
-        2. Reorder để tránh lost in the middle
-        3. Format context với source labels
-        4. Build prompt (system + context + query)
-        5. Call LLM
-        6. Return answer + sources
-
-    Args:
-        query: Câu hỏi của user
-
-    Returns:
-        {
-            'answer': str,           # Câu trả lời có citation
-            'sources': list[dict],   # Các chunks đã dùng
-            'retrieval_source': str  # 'hybrid' hoặc 'pageindex'
-        }
+    End-to-end RAG generation có citation qua OpenRouter API.
     """
     # TODO: Implement generation pipeline
-    #
-    # # Step 1: Retrieve
-    # chunks = retrieve(query, top_k=top_k)
-    #
-    # # Step 2: Reorder
-    # reordered = reorder_for_llm(chunks)
-    #
-    # # Step 3: Format context
-    # context = format_context(reordered)
-    #
-    # # Step 4: Build prompt
-    # user_message = f"""Context:\n{context}\n\n---\n\nQuestion: {query}"""
-    #
-    # # Step 5: Call LLM
-    # from openai import OpenAI
-    # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    #
-    # response = client.chat.completions.create(
-    #     model="gpt-4o-mini",
-    #     messages=[
-    #         {"role": "system", "content": SYSTEM_PROMPT},
-    #         {"role": "user", "content": user_message}
-    #     ],
-    #     temperature=TEMPERATURE,
-    #     top_p=TOP_P,
-    # )
-    #
-    # answer = response.choices[0].message.content
-    #
-    # # Step 6: Return
-    # return {
-    #     "answer": answer,
-    #     "sources": chunks,
-    #     "retrieval_source": chunks[0].get("source", "hybrid") if chunks else "none"
-    # }
-    raise NotImplementedError("Implement generate_with_citation")
+    
+    # Step 1: Retrieve dữ liệu từ pipeline tổng hợp (Task 9)
+    chunks = retrieve(query, top_k=top_k)
+    
+    # Step 2: Sắp xếp lại danh sách nhằm tối ưu cơ chế chú ý của LLM
+    reordered = reorder_for_llm(chunks)
+    
+    # Step 3: Đóng gói và gắn nhãn nguồn cho context dữ liệu
+    context = format_context(reordered)
+    
+    # Step 4: Khởi tạo thông điệp đầu vào của user
+    user_message = f"Context:\n{context}\n\n---\n\nQuestion: {query}"
+    
+    # Step 5: Cấu hình gọi LLM sử dụng OpenRouter Base URL
+    from openai import OpenAI
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENAI_API_KEY")
+    )
+    
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-120b:free",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message}
+        ],
+        temperature=TEMPERATURE,
+        top_p=TOP_P,
+        extra_headers={
+            "HTTP-Referer": "http://localhost:3000",
+            "X-Title": "RAG Lab Assignment"
+        }
+    )
+    
+    answer = response.choices[0].message.content
+    
+    # Step 6: Trả kết quả chuẩn format cấu trúc chấm điểm
+    return {
+        "answer": answer,
+        "sources": chunks,
+        "retrieval_source": chunks[0].get("source", "hybrid") if chunks else "none"
+    }
 
 
 if __name__ == "__main__":
